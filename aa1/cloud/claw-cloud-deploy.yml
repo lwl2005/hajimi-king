@@ -1,0 +1,259 @@
+# Claw.cloud 部署配置文件
+# Hajimi King - 网页版配置管理
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hajimi-king-config
+  namespace: default
+data:
+  # 网页版配置
+  WEB_PORT: "5000"
+  WEB_DEBUG: "false"
+  HAJIMI_MODE: "both"
+  
+  # 基础配置
+  DATA_PATH: "/app/data"
+  DATE_RANGE_DAYS: "730"
+  QUERIES_FILE: "queries.txt"
+  HAJIMI_CHECK_MODEL: "gemini-2.5-flash"
+  
+  # 文件路径黑名单
+  FILE_PATH_BLACKLIST: "readme,docs,doc/,.md,example,sample,tutorial,test,spec,demo,mock"
+  
+  # 同步配置（默认关闭）
+  GEMINI_BALANCER_SYNC_ENABLED: "false"
+  GPT_LOAD_SYNC_ENABLED: "false"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hajimi-king-secrets
+  namespace: default
+type: Opaque
+stringData:
+  # 重要：部署前请修改这些敏感信息
+  WEB_PASSWORD: "hajimi123"  # 请修改为强密码
+  WEB_SECRET_KEY: "hajimi-king-web-secret-key-change-me"  # 请修改为随机密钥
+  GITHUB_TOKENS: ""  # 请填入您的GitHub Tokens，用逗号分隔
+  PROXY: ""  # 可选：代理配置
+  GEMINI_BALANCER_URL: ""
+  GEMINI_BALANCER_AUTH: ""
+  GPT_LOAD_URL: ""
+  GPT_LOAD_AUTH: ""
+  GPT_LOAD_GROUP_NAME: ""
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hajimi-king-data
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi  # 数据存储空间
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hajimi-king
+  namespace: default
+  labels:
+    app: hajimi-king
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hajimi-king
+  template:
+    metadata:
+      labels:
+        app: hajimi-king
+    spec:
+      containers:
+      - name: hajimi-king
+        image: hajimi-king:latest
+        ports:
+        - containerPort: 5000
+          name: web
+        env:
+        # 从ConfigMap加载配置
+        - name: WEB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: hajimi-king-config
+              key: WEB_PORT
+        - name: WEB_DEBUG
+          valueFrom:
+            configMapKeyRef:
+              name: hajimi-king-config
+              key: WEB_DEBUG
+        - name: HAJIMI_MODE
+          valueFrom:
+            configMapKeyRef:
+              name: hajimi-king-config
+              key: HAJIMI_MODE
+        - name: DATA_PATH
+          valueFrom:
+            configMapKeyRef:
+              name: hajimi-king-config
+              key: DATA_PATH
+        - name: DATE_RANGE_DAYS
+          valueFrom:
+            configMapKeyRef:
+              name: hajimi-king-config
+              key: DATE_RANGE_DAYS
+        - name: QUERIES_FILE
+          valueFrom:
+            configMapKeyRef:
+              name: hajimi-king-config
+              key: QUERIES_FILE
+        - name: HAJIMI_CHECK_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: hajimi-king-config
+              key: HAJIMI_CHECK_MODEL
+        - name: FILE_PATH_BLACKLIST
+          valueFrom:
+            configMapKeyRef:
+              name: hajimi-king-config
+              key: FILE_PATH_BLACKLIST
+        - name: GEMINI_BALANCER_SYNC_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: hajimi-king-config
+              key: GEMINI_BALANCER_SYNC_ENABLED
+        - name: GPT_LOAD_SYNC_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: hajimi-king-config
+              key: GPT_LOAD_SYNC_ENABLED
+        
+        # 从Secret加载敏感信息
+        - name: WEB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: hajimi-king-secrets
+              key: WEB_PASSWORD
+        - name: WEB_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: hajimi-king-secrets
+              key: WEB_SECRET_KEY
+        - name: GITHUB_TOKENS
+          valueFrom:
+            secretKeyRef:
+              name: hajimi-king-secrets
+              key: GITHUB_TOKENS
+        - name: PROXY
+          valueFrom:
+            secretKeyRef:
+              name: hajimi-king-secrets
+              key: PROXY
+        - name: GEMINI_BALANCER_URL
+          valueFrom:
+            secretKeyRef:
+              name: hajimi-king-secrets
+              key: GEMINI_BALANCER_URL
+        - name: GEMINI_BALANCER_AUTH
+          valueFrom:
+            secretKeyRef:
+              name: hajimi-king-secrets
+              key: GEMINI_BALANCER_AUTH
+        - name: GPT_LOAD_URL
+          valueFrom:
+            secretKeyRef:
+              name: hajimi-king-secrets
+              key: GPT_LOAD_URL
+        - name: GPT_LOAD_AUTH
+          valueFrom:
+            secretKeyRef:
+              name: hajimi-king-secrets
+              key: GPT_LOAD_AUTH
+        - name: GPT_LOAD_GROUP_NAME
+          valueFrom:
+            secretKeyRef:
+              name: hajimi-king-secrets
+              key: GPT_LOAD_GROUP_NAME
+        
+        volumeMounts:
+        - name: data-volume
+          mountPath: /app/data
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        
+        livenessProbe:
+          httpGet:
+            path: /login
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /login
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: hajimi-king-data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hajimi-king-service
+  namespace: default
+  labels:
+    app: hajimi-king
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5000
+    targetPort: 5000
+    protocol: TCP
+    name: web
+  selector:
+    app: hajimi-king
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hajimi-king-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - your-domain.claw.cloud  # 请替换为您的域名
+    secretName: hajimi-king-tls
+  rules:
+  - host: your-domain.claw.cloud  # 请替换为您的域名
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: hajimi-king-service
+            port:
+              number: 5000

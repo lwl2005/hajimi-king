@@ -1,0 +1,500 @@
+{% extends "base.html" %}
+
+{% block title %}控制面板 - Hajimi King{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>
+                <i class="bi bi-speedometer2"></i> 控制面板
+            </h2>
+            <div>
+                <button class="btn btn-outline-primary me-2" onclick="refreshDashboard()">
+                    <i class="bi bi-arrow-clockwise"></i> 刷新
+                </button>
+                <button class="btn btn-success" onclick="startScan()">
+                    <i class="bi bi-play-fill"></i> 开始扫描
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 系统状态概览 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 2.5rem;"></i>
+                <h5 class="card-title mt-2">有效密钥</h5>
+                <h2 class="text-success" id="valid-keys-count">-</h2>
+                <small class="text-muted">可用的API密钥</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-clock-fill text-warning" style="font-size: 2.5rem;"></i>
+                <h5 class="card-title mt-2">限流密钥</h5>
+                <h2 class="text-warning" id="rate-limited-keys-count">-</h2>
+                <small class="text-muted">暂时不可用</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-send-fill text-info" style="font-size: 2.5rem;"></i>
+                <h5 class="card-title mt-2">已发送</h5>
+                <h2 class="text-info" id="sent-keys-count">-</h2>
+                <small class="text-muted">已同步到外部</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <i class="bi bi-file-earmark-text-fill text-primary" style="font-size: 2.5rem;"></i>
+                <h5 class="card-title mt-2">扫描文件</h5>
+                <h2 class="text-primary" id="scanned-files-count">-</h2>
+                <small class="text-muted">已处理文件数</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 系统状态和配置 -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-activity"></i> 系统状态
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="system-status-container">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <p class="mt-2">正在加载系统状态...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-graph-up"></i> 扫描进度
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">当前进度</label>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" 
+                             style="width: 0%" 
+                             id="scan-progress">0%</div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-6">
+                        <small class="text-muted">扫描状态:</small>
+                        <p class="mb-1" id="scan-status">待机中</p>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">最后扫描:</small>
+                        <p class="mb-1" id="last-scan-time">-</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 最近发现的密钥 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-key-fill"></i> 最近发现的密钥
+                    </h5>
+                    <a href="{{ url_for('keys') }}" class="btn btn-sm btn-outline-primary">
+                        查看全部 <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="recent-keys-container">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <p class="mt-2">正在加载最近密钥...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 实时日志预览 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-terminal"></i> 实时日志
+                    </h5>
+                    <a href="{{ url_for('logs') }}" class="btn btn-sm btn-outline-primary">
+                        查看详细 <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div id="recent-logs-container" style="height: 300px; overflow-y: auto; background: #1e1e1e; color: #fff; font-family: 'Courier New', monospace; font-size: 13px;">
+                    <div class="text-center py-5" style="color: #ccc;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <p class="mt-2">正在加载日志...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 快速操作模态框 -->
+<div class="modal fade" id="quickActionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-lightning-fill"></i> 快速操作
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-success" onclick="startScan()">
+                        <i class="bi bi-play-fill"></i> 开始新的扫描
+                    </button>
+                    <button class="btn btn-warning" onclick="pauseScan()">
+                        <i class="bi bi-pause-fill"></i> 暂停当前扫描
+                    </button>
+                    <button class="btn btn-info" onclick="exportAllKeys()">
+                        <i class="bi bi-download"></i> 导出所有密钥
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearLogs()">
+                        <i class="bi bi-trash"></i> 清理日志文件
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let dashboardRefreshInterval = null;
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboard();
+    // 启动自动刷新 (30秒)
+    dashboardRefreshInterval = setInterval(loadDashboard, 30000);
+});
+
+// 加载控制面板数据
+function loadDashboard() {
+    loadStatistics();
+    loadSystemStatus();
+    loadRecentKeys();
+    loadRecentLogs();
+}
+
+// 加载统计信息
+function loadStatistics() {
+    fetch('/api/keys/statistics')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('valid-keys-count').textContent = data.valid_keys || 0;
+            document.getElementById('rate-limited-keys-count').textContent = data.rate_limited_keys || 0;
+            document.getElementById('sent-keys-count').textContent = data.sent_keys || 0;
+            document.getElementById('scanned-files-count').textContent = data.total_files_scanned || 0;
+            
+            // 更新最后扫描时间
+            if (data.last_scan_time) {
+                document.getElementById('last-scan-time').textContent = new Date(data.last_scan_time).toLocaleString('zh-CN');
+            }
+        })
+        .catch(error => {
+            console.error('加载统计信息失败:', error);
+        });
+}
+
+// 加载系统状态
+function loadSystemStatus() {
+    fetch('/api/status')
+        .then(response => response.json())
+        .then(data => {
+            displaySystemStatus(data);
+        })
+        .catch(error => {
+            console.error('加载系统状态失败:', error);
+        });
+}
+
+// 显示系统状态
+function displaySystemStatus(status) {
+    const container = document.getElementById('system-status-container');
+    
+    let html = '<div class="row">';
+    
+    // 配置状态
+    html += `
+        <div class="col-6 mb-3">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-gear-fill ${status.config_valid ? 'text-success' : 'text-danger'} me-2"></i>
+                <div>
+                    <small class="text-muted">配置状态</small>
+                    <div class="fw-bold ${status.config_valid ? 'text-success' : 'text-danger'}">
+                        ${status.config_valid ? '正常' : '异常'}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // GitHub Tokens
+    html += `
+        <div class="col-6 mb-3">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-github ${status.github_tokens_count > 0 ? 'text-success' : 'text-warning'} me-2"></i>
+                <div>
+                    <small class="text-muted">GitHub Tokens</small>
+                    <div class="fw-bold">${status.github_tokens_count} 个</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 代理配置
+    html += `
+        <div class="col-6 mb-3">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-shield-check ${status.proxy_count > 0 ? 'text-success' : 'text-warning'} me-2"></i>
+                <div>
+                    <small class="text-muted">代理配置</small>
+                    <div class="fw-bold">${status.proxy_count} 个</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 数据目录
+    html += `
+        <div class="col-6 mb-3">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-folder-fill ${status.data_directory.exists ? 'text-success' : 'text-danger'} me-2"></i>
+                <div>
+                    <small class="text-muted">数据目录</small>
+                    <div class="fw-bold ${status.data_directory.exists ? 'text-success' : 'text-danger'}">
+                        ${status.data_directory.exists ? '正常' : '不存在'}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// 加载最近密钥
+function loadRecentKeys() {
+    fetch('/api/keys?type=valid&per_page=5')
+        .then(response => response.json())
+        .then(data => {
+            displayRecentKeys(data.keys || []);
+        })
+        .catch(error => {
+            console.error('加载最近密钥失败:', error);
+        });
+}
+
+// 显示最近密钥
+function displayRecentKeys(keys) {
+    const container = document.getElementById('recent-keys-container');
+    
+    if (keys.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-3">
+                <i class="bi bi-inbox" style="font-size: 2rem; color: #ccc;"></i>
+                <p class="text-muted mt-2">暂无密钥数据</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '<div class="table-responsive"><table class="table table-sm">';
+    html += '<thead><tr><th>密钥</th><th>发现时间</th><th>状态</th></tr></thead><tbody>';
+    
+    keys.forEach(key => {
+        const shortKey = key.key.substring(0, 25) + '...';
+        const foundTime = key.found_time ? new Date(key.found_time).toLocaleString('zh-CN') : '-';
+        
+        html += `
+            <tr>
+                <td><code class="text-primary">${shortKey}</code></td>
+                <td><small class="text-muted">${foundTime}</small></td>
+                <td><span class="badge bg-success">有效</span></td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+// 加载最近日志
+function loadRecentLogs() {
+    fetch('/api/logs?type=scan&lines=20')
+        .then(response => response.json())
+        .then(data => {
+            displayRecentLogs(data.logs || []);
+        })
+        .catch(error => {
+            console.error('加载最近日志失败:', error);
+        });
+}
+
+// 显示最近日志
+function displayRecentLogs(logs) {
+    const container = document.getElementById('recent-logs-container');
+    
+    if (logs.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-5" style="color: #ccc;">
+                <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                <p class="mt-2">暂无日志数据</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '<div class="p-3">';
+    
+    logs.slice(-10).forEach(log => {  // 只显示最后10条
+        const timestamp = new Date(log.timestamp).toLocaleTimeString('zh-CN');
+        const levelClass = getLevelClass(log.level);
+        
+        html += `
+            <div class="log-line mb-1" style="font-size: 12px;">
+                <span style="color: #888;">[${timestamp}]</span>
+                <span style="color: ${levelClass};">${log.level}</span>
+                <span style="color: #fff; margin-left: 10px;">${escapeHtml(log.message.substring(0, 100))}${log.message.length > 100 ? '...' : ''}</span>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+    
+    // 滚动到底部
+    container.scrollTop = container.scrollHeight;
+}
+
+// 获取日志级别颜色
+function getLevelClass(level) {
+    switch (level.toUpperCase()) {
+        case 'ERROR':
+            return '#ff6b6b';
+        case 'WARNING':
+        case 'WARN':
+            return '#feca57';
+        case 'INFO':
+            return '#48dbfb';
+        case 'DEBUG':
+            return '#ff9ff3';
+        default:
+            return '#ddd';
+    }
+}
+
+// HTML转义
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// 刷新控制面板
+function refreshDashboard() {
+    loadDashboard();
+    showAlert('success', '控制面板已刷新');
+}
+
+// 开始扫描
+function startScan() {
+    showAlert('info', '扫描功能正在开发中...');
+    // TODO: 实现扫描启动功能
+}
+
+// 暂停扫描
+function pauseScan() {
+    showAlert('info', '暂停功能正在开发中...');
+    // TODO: 实现扫描暂停功能
+}
+
+// 导出所有密钥
+function exportAllKeys() {
+    window.location.href = '/api/keys/export?type=valid&format=txt';
+    showAlert('success', '正在导出所有密钥...');
+}
+
+// 显示提示消息
+function showAlert(type, message) {
+    const alertHtml = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-triangle' : 'info-circle'}"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    const container = document.querySelector('.container');
+    const firstChild = container.firstElementChild;
+    const alertDiv = document.createElement('div');
+    alertDiv.innerHTML = alertHtml;
+    container.insertBefore(alertDiv.firstElementChild, firstChild);
+    
+    // 5秒后自动隐藏
+    setTimeout(() => {
+        const alert = document.querySelector('.alert');
+        if (alert) {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        }
+    }, 5000);
+}
+
+// 页面卸载时清理定时器
+window.addEventListener('beforeunload', function() {
+    if (dashboardRefreshInterval) {
+        clearInterval(dashboardRefreshInterval);
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,261 @@
+# Hajimi King - 云端部署 Docker Compose 配置
+# 适用于 claw.cloud 等云平台的容器化部署
+
+version: '3.8'
+
+services:
+  hajimi-king:
+    build:
+      context: ..
+      dockerfile: cloud/Dockerfile.cloud
+    image: hajimi-king:cloud
+    container_name: hajimi-king-cloud
+    restart: unless-stopped
+    
+    # 端口映射
+    ports:
+      - "${WEB_PORT:-5000}:5000"
+    
+    # 环境变量配置
+    environment:
+      # 网页版配置
+      - WEB_PORT=${WEB_PORT:-5000}
+      - WEB_PASSWORD=${WEB_PASSWORD:-hajimi123}
+      - WEB_SECRET_KEY=${WEB_SECRET_KEY:-hajimi-king-web-secret-key-change-me}
+      - WEB_DEBUG=${WEB_DEBUG:-false}
+      - HAJIMI_MODE=${HAJIMI_MODE:-both}
+      
+      # GitHub配置
+      - GITHUB_TOKENS=${GITHUB_TOKENS}
+      
+      # 基础配置
+      - DATA_PATH=${DATA_PATH:-/app/data}
+      - DATE_RANGE_DAYS=${DATE_RANGE_DAYS:-730}
+      - QUERIES_FILE=${QUERIES_FILE:-queries.txt}
+      - HAJIMI_CHECK_MODEL=${HAJIMI_CHECK_MODEL:-gemini-2.5-flash}
+      
+      # 代理配置
+      - PROXY=${PROXY}
+      
+      # Gemini Balancer配置
+      - GEMINI_BALANCER_SYNC_ENABLED=${GEMINI_BALANCER_SYNC_ENABLED:-false}
+      - GEMINI_BALANCER_URL=${GEMINI_BALANCER_URL}
+      - GEMINI_BALANCER_AUTH=${GEMINI_BALANCER_AUTH}
+      
+      # GPT Load配置
+      - GPT_LOAD_SYNC_ENABLED=${GPT_LOAD_SYNC_ENABLED:-false}
+      - GPT_LOAD_URL=${GPT_LOAD_URL}
+      - GPT_LOAD_AUTH=${GPT_LOAD_AUTH}
+      - GPT_LOAD_GROUP_NAME=${GPT_LOAD_GROUP_NAME}
+      
+      # 高级配置
+      - FILE_PATH_BLACKLIST=${FILE_PATH_BLACKLIST:-readme,docs,doc/,.md,example,sample,tutorial,test,spec,demo,mock}
+      - VALID_KEY_PREFIX=${VALID_KEY_PREFIX:-keys/keys_valid_}
+      - RATE_LIMITED_KEY_PREFIX=${RATE_LIMITED_KEY_PREFIX:-keys/key_429_}
+      - KEYS_SEND_PREFIX=${KEYS_SEND_PREFIX:-keys/keys_send_}
+      - VALID_KEY_DETAIL_PREFIX=${VALID_KEY_DETAIL_PREFIX:-logs/keys_valid_detail_}
+      - RATE_LIMITED_KEY_DETAIL_PREFIX=${RATE_LIMITED_KEY_DETAIL_PREFIX:-logs/key_429_detail_}
+      - KEYS_SEND_DETAIL_PREFIX=${KEYS_SEND_DETAIL_PREFIX:-logs/keys_send_detail_}
+      - SCANNED_SHAS_FILE=${SCANNED_SHAS_FILE:-scanned_shas.txt}
+      
+      # 云端优化配置
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - ENABLE_METRICS=${ENABLE_METRICS:-false}
+      - METRICS_PORT=${METRICS_PORT:-9090}
+    
+    # 数据卷挂载
+    volumes:
+      - hajimi-data:/app/data
+      - hajimi-logs:/var/log/supervisor
+      - ./queries.txt:/app/queries.txt:ro
+    
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          memory: ${MEMORY_LIMIT:-1G}
+          cpus: ${CPU_LIMIT:-0.5}
+        reservations:
+          memory: ${MEMORY_REQUEST:-512M}
+          cpus: ${CPU_REQUEST:-0.25}
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/login"]
+      interval: ${HEALTH_CHECK_INTERVAL:-30s}
+      timeout: ${HEALTH_CHECK_TIMEOUT:-10s}
+      retries: ${HEALTH_CHECK_RETRIES:-3}
+      start_period: 60s
+    
+    # 网络配置
+    networks:
+      - hajimi-network
+    
+    # 安全配置
+    security_opt:
+      - no-new-privileges:true
+    
+    # 用户配置 (非root用户)
+    user: "${RUN_USER_ID:-1000}:${RUN_GROUP_ID:-1000}"
+    
+    # 只读根文件系统 (可选，提高安全性)
+    # read_only: true
+    
+    # 临时文件系统
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # 标签
+    labels:
+      - "com.hajimi-king.service=main"
+      - "com.hajimi-king.version=cloud"
+      - "com.hajimi-king.description=GitHub Gemini Key Scanner with Web Interface"
+
+  # 可选：Redis缓存服务 (用于会话存储和缓存)
+  redis:
+    image: redis:7-alpine
+    container_name: hajimi-redis
+    restart: unless-stopped
+    
+    # 端口 (仅内部访问)
+    expose:
+      - "6379"
+    
+    # 数据持久化
+    volumes:
+      - hajimi-redis-data:/data
+    
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: 0.2
+        reservations:
+          memory: 128M
+          cpus: 0.1
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    # 网络配置
+    networks:
+      - hajimi-network
+    
+    # 安全配置
+    security_opt:
+      - no-new-privileges:true
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+    
+    # 标签
+    labels:
+      - "com.hajimi-king.service=cache"
+      - "com.hajimi-king.version=cloud"
+
+  # 可选：Nginx反向代理 (用于SSL终止和负载均衡)
+  nginx:
+    image: nginx:alpine
+    container_name: hajimi-nginx
+    restart: unless-stopped
+    
+    # 端口映射
+    ports:
+      - "80:80"
+      - "443:443"
+    
+    # 配置文件
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - hajimi-nginx-logs:/var/log/nginx
+    
+    # 依赖服务
+    depends_on:
+      - hajimi-king
+    
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: 0.2
+        reservations:
+          memory: 128M
+          cpus: 0.1
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    # 网络配置
+    networks:
+      - hajimi-network
+    
+    # 安全配置
+    security_opt:
+      - no-new-privileges:true
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # 标签
+    labels:
+      - "com.hajimi-king.service=proxy"
+      - "com.hajimi-king.version=cloud"
+
+# 网络配置
+networks:
+  hajimi-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# 数据卷配置
+volumes:
+  hajimi-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_VOLUME_PATH:-./data}
+  
+  hajimi-logs:
+    driver: local
+  
+  hajimi-redis-data:
+    driver: local
+  
+  hajimi-nginx-logs:
+    driver: local
+
+# 扩展配置 (用于开发和测试)
+x-common-variables: &common-variables
+  TZ: ${TIMEZONE:-UTC}
+  LANG: ${LANGUAGE:-en_US.UTF-8}
+  LC_ALL: ${LANGUAGE:-en_US.UTF-8}

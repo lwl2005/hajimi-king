@@ -1,0 +1,9 @@
+# Hajimi King 有效密钥文件
+# 创建时间: 2025-08-10 17:45:51
+# 这是演示数据，请勿在生产环境使用
+
+AIzaSyDemoKey1234567890abcdefghijklmnop
+AIzaSyDemoKey2345678901bcdefghijklmnopq
+AIzaSyDemoKey3456789012cdefghijklmnopqr
+AIzaSyDemoKey4567890123defghijklmnopqrs
+AIzaSyDemoKey5678901234efghijklmnopqrst

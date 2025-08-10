@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+
+{% block title %}配置管理 - Hajimi King{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>
+                <i class="bi bi-gear-fill"></i> 配置管理
+            </h2>
+            <div>
+                <button class="btn btn-outline-primary me-2" onclick="loadStatus()">
+                    <i class="bi bi-arrow-clockwise"></i> 刷新状态
+                </button>
+                <button class="btn btn-success" onclick="saveConfig()">
+                    <i class="bi bi-save"></i> 保存配置
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 系统状态卡片 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-activity"></i> 系统状态
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="status-container">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <p class="mt-2">正在加载系统状态...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 配置表单 -->
+<form id="config-form">
+    <!-- GitHub配置 -->
+    <div class="config-section">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-github"></i> GitHub 配置
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="github_tokens" class="form-label">GitHub Tokens *</label>
+                    <textarea class="form-control" 
+                              id="github_tokens" 
+                              name="github_tokens" 
+                              rows="3" 
+                              placeholder="ghp_token1,ghp_token2,ghp_token3"
+                              required>{{ config.github_tokens }}</textarea>
+                    <div class="help-text">
+                        <i class="bi bi-info-circle"></i> 
+                        多个token用逗号分隔。获取方式：GitHub Settings > Developer settings > Personal access tokens
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 基础配置 -->
+    <div class="config-section">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-sliders"></i> 基础配置
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="data_path" class="form-label">数据存储路径</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="data_path" 
+                                   name="data_path" 
+                                   value="{{ config.data_path }}"
+                                   placeholder="/app/data">
+                            <div class="help-text">存储扫描结果和日志的目录</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="date_range_days" class="form-label">仓库年龄过滤（天）</label>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="date_range_days" 
+                                   name="date_range_days" 
+                                   value="{{ config.date_range_days }}"
+                                   min="1"
+                                   max="3650">
+                            <div class="help-text">只扫描指定天数内更新的仓库</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="queries_file" class="form-label">查询配置文件</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="queries_file" 
+                                   name="queries_file" 
+                                   value="{{ config.queries_file }}"
+                                   placeholder="queries.txt">
+                            <div class="help-text">GitHub搜索查询表达式配置文件</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="hajimi_check_model" class="form-label">验证模型</label>
+                            <select class="form-control" id="hajimi_check_model" name="hajimi_check_model">
+                                <option value="gemini-2.5-flash" {{ 'selected' if config.hajimi_check_model == 'gemini-2.5-flash' else '' }}>gemini-2.5-flash</option>
+                                <option value="gemini-1.5-flash" {{ 'selected' if config.hajimi_check_model == 'gemini-1.5-flash' else '' }}>gemini-1.5-flash</option>
+                                <option value="gemini-1.5-pro" {{ 'selected' if config.hajimi_check_model == 'gemini-1.5-pro' else '' }}>gemini-1.5-pro</option>
+                            </select>
+                            <div class="help-text">用于验证API密钥有效性的Gemini模型</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="proxy" class="form-label">代理配置</label>
+                    <textarea class="form-control" 
+                              id="proxy" 
+                              name="proxy" 
+                              rows="2" 
+                              placeholder="http://proxy1:port,http://user:pass@proxy2:port">{{ config.proxy }}</textarea>
+                    <div class="help-text">
+                        <i class="bi bi-exclamation-triangle text-warning"></i> 
+                        强烈建议配置代理！多个代理用逗号分隔，支持账密认证
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gemini Balancer配置 -->
+    <div class="config-section">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-diagram-3"></i> Gemini Balancer 同步
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" 
+                               type="checkbox" 
+                               id="gemini_balancer_sync_enabled" 
+                               name="gemini_balancer_sync_enabled"
+                               {{ 'checked' if config.gemini_balancer_sync_enabled else '' }}>
+                        <label class="form-check-label" for="gemini_balancer_sync_enabled">
+                            启用 Gemini Balancer 同步
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="gemini_balancer_url" class="form-label">Balancer URL</label>
+                            <input type="url" 
+                                   class="form-control" 
+                                   id="gemini_balancer_url" 
+                                   name="gemini_balancer_url" 
+                                   value="{{ config.gemini_balancer_url }}"
+                                   placeholder="http://your-gemini-balancer.com">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="gemini_balancer_auth" class="form-label">认证密码</label>
+                            <input type="password" 
+                                   class="form-control" 
+                                   id="gemini_balancer_auth" 
+                                   name="gemini_balancer_auth" 
+                                   value="{{ config.gemini_balancer_auth }}"
+                                   placeholder="balancer密码">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GPT Load配置 -->
+    <div class="config-section">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-cpu"></i> GPT Load Balancer 同步
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" 
+                               type="checkbox" 
+                               id="gpt_load_sync_enabled" 
+                               name="gpt_load_sync_enabled"
+                               {{ 'checked' if config.gpt_load_sync_enabled else '' }}>
+                        <label class="form-check-label" for="gpt_load_sync_enabled">
+                            启用 GPT Load Balancer 同步
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="gpt_load_url" class="form-label">Load Balancer URL</label>
+                            <input type="url" 
+                                   class="form-control" 
+                                   id="gpt_load_url" 
+                                   name="gpt_load_url" 
+                                   value="{{ config.gpt_load_url }}"
+                                   placeholder="http://your-gpt-load.com">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="gpt_load_auth" class="form-label">认证Token</label>
+                            <input type="password" 
+                                   class="form-control" 
+                                   id="gpt_load_auth" 
+                                   name="gpt_load_auth" 
+                                   value="{{ config.gpt_load_auth }}"
+                                   placeholder="页面密码">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="gpt_load_group_name" class="form-label">组名</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="gpt_load_group_name" 
+                                   name="gpt_load_group_name" 
+                                   value="{{ config.gpt_load_group_name }}"
+                                   placeholder="group1,group2">
+                            <div class="help-text">多个组名用逗号分隔</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 高级配置 -->
+    <div class="config-section">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-tools"></i> 高级配置
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="file_path_blacklist" class="form-label">文件路径黑名单</label>
+                    <textarea class="form-control" 
+                              id="file_path_blacklist" 
+                              name="file_path_blacklist" 
+                              rows="2" 
+                              placeholder="readme,docs,doc/,.md,example,sample">{{ config.file_path_blacklist }}</textarea>
+                    <div class="help-text">
+                        过滤不需要扫描的文件路径关键词，用逗号分隔
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- 保存按钮 -->
+<div class="text-center mb-4">
+    <button class="btn btn-success btn-lg" onclick="saveConfig()">
+        <i class="bi bi-save"></i> 保存所有配置
+    </button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 页面加载时获取状态
+document.addEventListener('DOMContentLoaded', function() {
+    loadStatus();
+});
+
+// 加载系统状态
+function loadStatus() {
+    fetch('/api/status')
+        .then(response => response.json())
+        .then(data => {
+            displayStatus(data);
+        })
+        .catch(error => {
+            console.error('Error loading status:', error);
+            document.getElementById('status-container').innerHTML = 
+                '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> 无法加载系统状态</div>';
+        });
+}
+
+// 显示系统状态
+function displayStatus(status) {
+    const container = document.getElementById('status-container');
+    
+    let html = '<div class="row">';
+    
+    // 配置状态
+    html += `
+        <div class="col-md-3">
+            <div class="text-center">
+                <i class="bi bi-gear-fill ${status.config_valid ? 'text-success' : 'text-danger'}" style="font-size: 2rem;"></i>
+                <h6 class="mt-2">配置状态</h6>
+                <span class="badge ${status.config_valid ? 'bg-success' : 'bg-danger'} status-badge">
+                    ${status.config_valid ? '正常' : '异常'}
+                </span>
+            </div>
+        </div>
+    `;
+    
+    // GitHub Tokens
+    html += `
+        <div class="col-md-3">
+            <div class="text-center">
+                <i class="bi bi-github ${status.github_tokens_count > 0 ? 'text-success' : 'text-warning'}" style="font-size: 2rem;"></i>
+                <h6 class="mt-2">GitHub Tokens</h6>
+                <span class="badge ${status.github_tokens_count > 0 ? 'bg-success' : 'bg-warning'} status-badge">
+                    ${status.github_tokens_count} 个
+                </span>
+            </div>
+        </div>
+    `;
+    
+    // 代理配置
+    html += `
+        <div class="col-md-3">
+            <div class="text-center">
+                <i class="bi bi-shield-check ${status.proxy_count > 0 ? 'text-success' : 'text-warning'}" style="font-size: 2rem;"></i>
+                <h6 class="mt-2">代理配置</h6>
+                <span class="badge ${status.proxy_count > 0 ? 'bg-success' : 'bg-warning'} status-badge">
+                    ${status.proxy_count} 个
+                </span>
+            </div>
+        </div>
+    `;
+    
+    // 数据目录
+    html += `
+        <div class="col-md-3">
+            <div class="text-center">
+                <i class="bi bi-folder-fill ${status.data_directory.exists ? 'text-success' : 'text-danger'}" style="font-size: 2rem;"></i>
+                <h6 class="mt-2">数据目录</h6>
+                <span class="badge ${status.data_directory.exists ? 'bg-success' : 'bg-danger'} status-badge">
+                    ${status.data_directory.exists ? '存在' : '不存在'}
+                </span>
+            </div>
+        </div>
+    `;
+    
+    html += '</div>';
+    
+    // 添加详细信息
+    html += '<hr><div class="row mt-3">';
+    html += '<div class="col-12">';
+    html += '<small class="text-muted">';
+    html += `<i class="bi bi-clock"></i> 最后检查: ${new Date(status.last_check).toLocaleString('zh-CN')}`;
+    html += '</small>';
+    html += '</div>';
+    html += '</div>';
+    
+    container.innerHTML = html;
+}
+
+// 保存配置
+function saveConfig() {
+    const form = document.getElementById('config-form');
+    const formData = new FormData(form);
+    
+    // 构建配置对象
+    const config = {};
+    for (let [key, value] of formData.entries()) {
+        if (key.includes('_enabled')) {
+            config[key] = true;
+        } else {
+            config[key] = value;
+        }
+    }
+    
+    // 处理未选中的复选框
+    const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        if (!checkbox.checked) {
+            config[checkbox.name] = false;
+        }
+    });
+    
+    // 显示保存中状态
+    const saveBtn = event.target;
+    const originalText = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> 保存中...';
+    saveBtn.disabled = true;
+    
+    fetch('/api/config', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(config)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 显示成功消息
+            showAlert('success', data.message);
+            // 重新加载状态
+            loadStatus();
+        } else {
+            showAlert('danger', data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error saving config:', error);
+        showAlert('danger', '保存配置时发生错误');
+    })
+    .finally(() => {
+        // 恢复按钮状态
+        saveBtn.innerHTML = originalText;
+        saveBtn.disabled = false;
+    });
+}
+
+// 显示提示消息
+function showAlert(type, message) {
+    const alertHtml = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-triangle'}"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    // 在页面顶部插入提示
+    const container = document.querySelector('.container');
+    const firstChild = container.firstElementChild;
+    const alertDiv = document.createElement('div');
+    alertDiv.innerHTML = alertHtml;
+    container.insertBefore(alertDiv.firstElementChild, firstChild);
+    
+    // 5秒后自动隐藏
+    setTimeout(() => {
+        const alert = document.querySelector('.alert');
+        if (alert) {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}
